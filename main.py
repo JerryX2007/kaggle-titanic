@@ -541,3 +541,83 @@ print(
     "Accuracy standard deviation:",
     forest_results["test_accuracy"].std()
 )
+
+forest_parameter_search = GridSearchCV(
+    estimator=forest_model,
+    param_grid={
+        "classifier__max_depth": [3, 5, 7, None],
+        "classifier__min_samples_leaf": [1, 3, 5, 10]
+    },
+    scoring={
+        "accuracy": "accuracy",
+        "recall": "recall",
+        "f1": "f1"
+    },
+    refit="accuracy",
+    cv=cross_validator,
+    return_train_score=True
+)
+
+forest_parameter_search.fit(X, y)
+
+forest_tuning_results = pd.DataFrame(
+    forest_parameter_search.cv_results_
+)
+
+top_forest_results = forest_tuning_results.sort_values(
+    "mean_test_accuracy",
+    ascending=False
+).head(10)
+
+print("\nTop random forest settings:")
+print(
+    top_forest_results[[
+        "param_classifier__max_depth",
+        "param_classifier__min_samples_leaf",
+        "mean_train_accuracy",
+        "mean_test_accuracy",
+        "std_test_accuracy",
+        "mean_test_recall",
+        "mean_test_f1"
+    ]].to_string(index=False)
+)
+
+print("\nBest random forest parameters:")
+print(forest_parameter_search.best_params_)
+
+print("\nBest random forest accuracy:")
+print(forest_parameter_search.best_score_)
+
+final_forest_model = (
+    forest_parameter_search.best_estimator_
+)
+
+forest_test_predictions = final_forest_model.predict(
+    X_test
+)
+
+forest_submission = pd.DataFrame({
+    "PassengerId": test_data["PassengerId"],
+    "Survived": forest_test_predictions.astype(int)
+})
+
+assert forest_submission.shape == (418, 2)
+assert set(
+    forest_submission["Survived"].unique()
+).issubset({0, 1})
+
+forest_submission.to_csv(
+    "submission_random_forest.csv",
+    index=False
+)
+
+print("\nRandom forest submission preview:")
+print(forest_submission.head())
+
+print("\nPrediction counts:")
+print(forest_submission["Survived"].value_counts())
+
+print(
+    "\nPredictions different from logistic regression:",
+    (forest_test_predictions != test_predictions).sum()
+)
